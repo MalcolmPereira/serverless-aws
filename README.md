@@ -1,4 +1,4 @@
-# AWS SAM - Serverless Application Model Example
+# AWS SAM - Serverless Application Model
 
 Walkthrough building and testing [AWS Serverless Application Model](https://aws.amazon.com/serverless/sam/ "AWS SAM") using AWS SAM CLI and [LocalStack](https://github.com/localstack/localstack "LocalStack") locally. Image API Serverless Application incorporates AWS Serverless Application Model (SAM) for image processing implemented as Nodes JS Lambda Function and exposed via API Gateway Endpoint. The Image API stores image details in DynamoDB and images on S3.
 
