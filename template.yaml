@@ -1,0 +1,221 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  imageapi
+
+  Image Sampling (Resize Image BICUBIC / NEAREST_NEIGHBOR)
+
+  Returns processed image, stores original and resized image to S3 and other details in DynamoDB
+
+Globals:
+  Function:
+    Timeout: 3
+
+Resources:
+  #DynamoDB
+  ImageAPIDBTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: Images
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      ProvisionedThroughput:
+        ReadCapacityUnits: 1
+        WriteCapacityUnits: 1
+
+  #S3 Bucket
+  ImageAPIBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: imageapibucket
+
+  #API Gateway
+  ImageAPI:
+    Type: AWS::Serverless::Api
+    Properties:
+      EndpointConfiguration:
+        Type: REGIONAL
+      StageName: Prod
+      BinaryMediaTypes:
+        - image~1png
+      Auth:
+        ApiKeyRequired: true
+      Models:
+        StatusResponse:
+          type: object
+          required:
+            - statusCode
+            - message
+          properties:
+            statusCode:
+              type: integer
+            message:
+              type: string
+        Image:
+          type: object
+          required:
+            - image
+            - scaletype
+            - width
+            - height
+          properties:
+            image:
+              type: string
+            scaletype:
+              type: string
+            width:
+              type: integer
+            height:
+              type: integer
+        ImageDetail:
+          type: object
+          required:
+            - imageid
+          properties:
+            imageid:
+              type: string
+            date:
+              type: string
+            original:
+              type: string
+            resized:
+              type: string
+        Images:
+          #This is needed else give invalid model
+          #https://github.com/aws/serverless-application-model/issues/1559
+          properties:
+            dummy: dummy
+          type: array
+          items:
+            type: object
+            imageid:
+              type: string
+            date:
+              type: string
+            thumbnail:
+              type: string
+
+  #ImageAPI Keys
+  ImageAPIKey:
+    Type: AWS::ApiGateway::ApiKey
+    DependsOn: [ImageAPIUsagePlan]
+    Properties:
+      Enabled: true
+      GenerateDistinctId: false
+      Name: "IMAGE-API-KEY"
+      Value: "IMAGEAPIKEY20210206SERVERLESS"
+      StageKeys:
+        - RestApiId:
+            Ref: ImageAPI
+          StageName: Prod
+
+  #ImageAPI Usage Plan
+  ImageAPIUsagePlan:
+    Type: "AWS::ApiGateway::UsagePlan"
+    DependsOn:
+      - ImageAPIProdStage
+    Properties:
+      ApiStages:
+        - ApiId:
+            Ref: ImageAPI
+          Stage: Prod
+      Quota:
+        Limit: 1000
+        Period: MONTH
+      UsagePlanName: "ImageAPIUsagePlan"
+
+  ImageAPIUsagePlanKey:
+    Type: "AWS::ApiGateway::UsagePlanKey"
+    DependsOn:
+      - ImageAPI
+    Properties:
+      KeyId:
+        Ref: ImageAPIKey
+      KeyType: API_KEY
+      UsagePlanId:
+        Ref: ImageAPIUsagePlan
+
+  #Serverless Lambda Function
+  ImageAPIFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: imageapi/
+      Handler: app.lambdaHandler
+      Runtime: nodejs12.x
+      Timeout: 60
+      Policies:
+        - S3CrudPolicy:
+            BucketName:
+              Ref: ImageAPIBucket
+        - DynamoDBCrudPolicy:
+            TableName:
+              Ref: ImageAPIDBTable
+      #Defined to facilitate LocalStack local testing
+      #This is overwritten only for sam local start-api vis env.json
+      Environment:
+        Variables:
+          LOCALSTACK_ENDPOINT: ""
+      Events:
+        ImagesOption:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: ImageAPI
+            Path: /images
+            Method: options
+            Auth:
+              ApiKeyRequired: false
+        ImagesGetAll:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: ImageAPI
+            Path: /images
+            Method: get
+            RequestParameters:
+              - method.request.querystring.imageid
+            Auth:
+              ApiKeyRequired: true
+        ImageOption:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: ImageAPI
+            Path: /images/{imageid}
+            Method: options
+            Auth:
+              ApiKeyRequired: false
+        ImagesGetByID:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: ImageAPI
+            Path: /images/{imageid}
+            Method: get
+            Auth:
+              ApiKeyRequired: true
+        ImagesDeleteByID:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: ImageAPI
+            Path: /images/{imageid}
+            Method: delete
+            Auth:
+              ApiKeyRequired: true
+        ImagesAdd:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: ImageAPI
+            Path: /images
+            Method: post
+            Auth:
+              ApiKeyRequired: true
+            RequestModel:
+              Model: Image
+              Required: true

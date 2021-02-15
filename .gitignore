@@ -1,0 +1,7 @@
+# General ignores
+.env
+*.DS_Store
+
+#AWS SAM Ignores
+.aws*
+samconfig.toml

@@ -1,0 +1,19 @@
+# Docker compose file for LocalStack to run Mock AWS Services Locally
+# S3, DynamoDB
+version: "3.8"
+services:
+  localstack:
+    image: localstack/localstack
+    ports:
+      - "4566:4566"
+      - "4571:4571"
+    environment:
+      - SERVICES=s3,dynamodb
+      - DEFAULT_REGION=us-east-2
+      - LAMBDA_EXECUTOR=local
+      - DEBUG=1
+      - DATA_DIR=/tmp/localstack/data
+    volumes:
+      - "~/tmp/localstack:/tmp/localstack:rw"
+      - "~/tmp/localstack/run/docker.sock:/var/run/docker.sock"
+    network_mode: bridge
